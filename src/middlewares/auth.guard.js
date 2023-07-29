@@ -3,6 +3,8 @@ const jwt = require("jsonwebtoken");
 const AppError = require("../utils/app-error");
 const asyncHandler = require("../utils/async.handler");
 const User = require("../models/v1/user.model");
+const Joi = require("joi");
+const { JoiRequestBodyValidator } = require("../utils/joiValidator");
 
 /**
  * Protects routes by checking for the presence of a valid JWT token in the request headers.
@@ -79,3 +81,81 @@ exports.hasPrivilege = (requiredLevel) => {
     }
   };
 };
+
+/**
+ * @function validateUserSignup
+ * @description Joi validation middleware for user signup data. Validates firstName, lastName, email, password, and passwordConfirm fields.
+ * @returns {object} Middleware to validate the request body using Joi
+ */
+exports.validateUserSignup = JoiRequestBodyValidator(
+  Joi.object({
+    firstName: Joi.string().min(2).required(),
+    lastName: Joi.string().min(2).required(),
+    email: Joi.string().email().required(),
+    password: Joi.string().min(6).required(),
+    passwordConfirm: Joi.any().valid(Joi.ref("password")).required().messages({
+      "any.only": '"passwordConfirm" must match "password"',
+    }),
+  }).messages({
+    "object.unknown": "{#label} is not allowed",
+    "string.min": '"{#label}" must be at least {#limit} characters',
+    "any.required": '"{#label}" is required',
+    "string.email": '"{#label}" must be a valid email',
+  })
+);
+
+/**
+ * @function validateLogin
+ * @description Joi validation middleware for user login data. Validates email and password fields.
+ * @returns {object} Middleware to validate the request body using Joi
+ */
+exports.validateLogin = JoiRequestBodyValidator(
+  Joi.object({
+    email: Joi.string().email().required(),
+    password: Joi.string().required(),
+  }).unknown(false)
+);
+
+/**
+ * @function validateUpdatePassword
+ * @description Joi validation middleware for updating the user's password. Validates currentPassword, newPassword, and newPasswordConfirm fields.
+ * @returns {object} Middleware to validate the request body using Joi
+ */
+exports.validateUpdatePassword = JoiRequestBodyValidator(
+  Joi.object({
+    currentPassword: Joi.string().required(),
+    newPassword: Joi.string().min(6).required(),
+    newPasswordConfirm: Joi.any()
+      .valid(Joi.ref("newPassword"))
+      .required()
+      .messages({
+        "any.only": "newPasswordConfirm must match newPassword",
+      }),
+  }).unknown(false)
+);
+
+/**
+ * @function validateForgotPassword
+ * @description Joi validation middleware for password recovery. Validates the email field to send a recovery link to the user.
+ * @returns {object} Middleware to validate the request body using Joi
+ */
+exports.validateForgotPassword = JoiRequestBodyValidator(
+  Joi.object({
+    email: Joi.string().email().required(),
+  }).unknown(false)
+);
+
+/**
+ * @function validateResetPassword
+ * @description Joi validation middleware for resetting the user's password. Validates code, password, and passwordConfirm fields.
+ * @returns {object} Middleware to validate the request body using Joi
+ */
+exports.validateResetPassword = JoiRequestBodyValidator(
+  Joi.object({
+    code: Joi.number().required(),
+    password: Joi.string().min(6).required(),
+    passwordConfirm: Joi.any().valid(Joi.ref("password")).required().messages({
+      "any.only": '"passwordConfirm" must match "password"',
+    }),
+  }).unknown(false)
+);
