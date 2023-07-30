@@ -27,31 +27,38 @@ const databaseTransportOptions = {
   format: combine(errors({ stack: true }), timestamp(), json()),
 };
 
+// Common transports
+let appTransports = [
+  new transports.Console({
+    level: "debug",
+    handleExceptions: true,
+    colorize: true,
+    format: format.combine(
+      format.colorize(),
+      format.timestamp(),
+      format.printf((info) => {
+        if (!info.label) {
+          info.label = "console";
+        }
+        return `${info.timestamp} [${info.label}] ${info.level}: ${info.message}`;
+      })
+    ),
+  }),
+  new transports.File(fileTransportOptions),
+];
+
+// If not in test environment, add MongoDB transport
+if (process.env.NODE_ENV !== "test") {
+  appTransports.push(new transports.MongoDB(databaseTransportOptions));
+}
+
 /**
  * Application logger middleware
  * @description  Logs all application events to the console, file transport in the logs directory and database.
  * @returns {object}  Application logger
  */
 const AppLogger = createLogger({
-  transports: [
-    new transports.Console({
-      level: "debug",
-      handleExceptions: true,
-      colorize: true,
-      format: format.combine(
-        format.colorize(),
-        format.timestamp(),
-        format.printf((info) => {
-          if (!info.label) {
-            info.label = "console";
-          }
-          return `${info.timestamp} [${info.label}] ${info.level}: ${info.message}`;
-        })
-      ),
-    }),
-    new transports.File(fileTransportOptions),
-    new transports.MongoDB(databaseTransportOptions),
-  ],
+  transports: appTransports,
   exitOnError: false,
 });
 

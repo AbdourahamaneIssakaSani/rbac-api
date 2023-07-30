@@ -6,8 +6,6 @@ const UsersGuard = require("../../middlewares/users.guard");
 
 const router = express.Router();
 
-// public routes
-
 router
   .route("/verify-email")
   .post(AuthGuard.protect, UserController.sendVerifyEmail)
@@ -21,13 +19,14 @@ router
     AuthGuard.protect,
     MediaGuard.uploadUserMedia,
     MediaGuard.resizeImage,
+    UsersGuard.validateUpdateUser,
     UserController.updateMe
   );
 
 router
   .route("/:id")
-  .all(AuthGuard.protect, AuthGuard.hasPrivilege("admin"))
-  .patch(UsersGuard.updateUser, UserController.updateMe)
+  .all(AuthGuard.protect, AuthGuard.hasHigherPrivilege)
+  .patch(UsersGuard.validateAssingRoleOrBlock, UserController.updateMe)
   .delete(AuthGuard.hasPrivilege("root"), UserController.deleteMe);
 
 router.get(

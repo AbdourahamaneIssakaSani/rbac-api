@@ -36,7 +36,7 @@ exports.sendVerifyEmail = async (req) => {
   // send email
   await EmailServices.sendWithNodeMailer({
     email: user.email,
-    subject: "ZPlatform: Verify your email",
+    subject: "Verify your email",
     message: `Hi ${user.firstName}. We are glad you want to verify your email. Click the link below to verify your email address and complete your profile setup.\n\n${verifyEmailUrl}`,
   });
 };

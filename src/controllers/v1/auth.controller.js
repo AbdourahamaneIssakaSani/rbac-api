@@ -6,7 +6,6 @@ const speakeasy = require("speakeasy");
 const asyncHandler = require("../../utils/async.handler");
 const AppError = require("../../utils/app-error");
 const EmailServices = require("../../utils/email.service");
-const { oAuth2Client, oauth2, authUrl } = require("../../utils/google");
 const { sendVerifyEmail } = require("./user.controller");
 
 /**
@@ -156,8 +155,8 @@ exports.setTwoFactorLogin = asyncHandler(async (req, res, next) => {
   // Save this secret for the user in the database.
   const secret = speakeasy.generateSecret({
     length: 20,
-    name: `ZPlatform (${user.email})`,
-    issuer: "ZPlatform",
+    name: `RBAC API (${user.email})`,
+    issuer: "RBAC API",
   });
 
   user.twoFactorSecret = secret.base32;
@@ -293,82 +292,3 @@ exports.updatePassword = asyncHandler(async (req, res, next) => {
     message: "Password has been changed successfully",
   });
 });
-
-/**
- * Redirects the user to the Google login page.
- * @param {import("express").Request} req The Express request object.
- * @param {import("express").Response} res The Express response object.
- */
-exports.googleLogin = (req, res) => {
-  // Save the returnTo parameter in the session
-  req.returnTo = req.query.returnTo;
-
-  res.redirect(authUrl);
-};
-
-/**
- * Handles the Google login callback and creates a session for the user.
- * @param {import("express").Request} req The Express request object.
- * @param {import("express").Response} res The Express response object.
- */
-exports.googleLoginCallback = async (req, res) => {
-  const { code } = req.query;
-
-  if (!code) {
-    return res.status(400).json({
-      message: "No code",
-    });
-  }
-
-  try {
-    const { tokens } = await oAuth2Client.getToken(code);
-    oAuth2Client.setCredentials(tokens);
-  } catch (err) {
-    console.log(err);
-    return res.status(500).json({
-      message: "Internal server error",
-    });
-  }
-
-  // get profile info
-  try {
-    const { data } = await oauth2.userinfo.get();
-
-    const user = await User.findOneAndUpdate(
-      { email: data.email },
-      {
-        $set: {
-          firstName: data.given_name,
-          lastName: data.family_name,
-          email: data.email,
-          googleId: data.id,
-        },
-      },
-      { new: true, upsert: true, runValidators: true }
-    );
-
-    const token = generateToken(user.id);
-
-    // sessionStore.set(req.session.id, req.session, (err) => {
-    //   if (err) {
-    //     // next(err); TODO: handle error from sessionStore
-    //     console.err(err);
-    //   }
-    // });
-
-    res.cookie("accessToken", token, {
-      httpOnly: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-    });
-
-    const returnUrl = req.returnTo || process.env.FRONTEND_URL;
-
-    res.redirect(returnUrl);
-  } catch (err) {
-    console.log(err);
-
-    return res.status(500).json({
-      message: "Internal server error",
-    });
-  }
-};

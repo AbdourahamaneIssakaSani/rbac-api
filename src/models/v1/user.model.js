@@ -34,6 +34,10 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  blocked: {
+    type: Boolean,
+    default: false,
+  },
   maritalStatus: {
     type: String,
     enum: ["Single", "Married", "Divorced", "Widowed"],
@@ -47,6 +51,11 @@ const userSchema = new mongoose.Schema({
   },
   dateOfBirth: {
     type: Date,
+    validate: {
+      validator: function (date) {
+        return new Date().getFullYear() - date.getFullYear() > 18;
+      },
+    },
   },
   nationality: {
     type: String,

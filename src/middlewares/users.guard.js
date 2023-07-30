@@ -24,9 +24,10 @@ exports.validateUpdateUser = JoiRequestBodyValidator(
   })
 );
 
-exports.validateAssingRole = JoiRequestBodyValidator(
+exports.validateAssingRoleOrBlock = JoiRequestBodyValidator(
   Joi.object({
-    role: Joi.string().valid("user", "auditor", "admin", "root").required(),
+    role: Joi.string().valid("user", "auditor", "admin", "root"),
+    blocked: Joi.boolean(),
   }).unknown(false)
 );
 

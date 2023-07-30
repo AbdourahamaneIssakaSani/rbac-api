@@ -47,7 +47,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
 
 /**
  * Verifies if the user has access rights to a route.
- *
+ * Access middleware
  * @param {...string} roles list of roles for a route
  * @returns {function} middleware function that checks if the user's role is in the list of allowed roles
  */
@@ -75,12 +75,31 @@ exports.hasPrivilege = (requiredLevel) => {
 
   return (req, res, next) => {
     if (levelPrivileges[req.user.role] >= levelPrivileges[requiredLevel]) {
-      next();
+      return next();
     } else {
-      res.status(403).send("Access denied. Insufficient privileges.");
+      return next(
+        AppError("You do not have permission to perform this action", 403)
+      );
     }
   };
 };
+
+// check if the current user has higher privileges than the user being updated
+exports.hasHigherPrivilege = asyncHandler(async (req, res, next) => {
+  const levelPrivileges = {
+    user: 1,
+    admin: 2,
+    root: 3,
+  };
+
+  const user = await User.findById(req.params.id);
+  if (levelPrivileges[req.user.role] > levelPrivileges[user.role]) {
+    return next();
+  }
+  return next(
+    AppError("You do not have permission to perform this action", 403)
+  );
+});
 
 /**
  * @function validateUserSignup

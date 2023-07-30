@@ -2,30 +2,35 @@ const { RateLimiterRedis } = require("rate-limiter-flexible");
 const { createClient } = require("redis");
 const AppLogger = require("../utils/app-logger");
 
-const redisClient = createClient({
-  password: "4FzbJW5NPpyh8RtaSvjgJDIkpnHEi1OA",
-  host: "redis-16088.c44.us-east-1-2.ec2.cloud.redislabs.com",
-  port: 16088,
-});
-
-redisClient.on("error", function (err) {
-  AppLogger.error("Could not establish a connection with redis🚨 " + err);
-});
-
-redisClient.on("connect", function (err) {
-  AppLogger.info("Connected to redis successfully 🎉");
-});
+let redisClient;
+let rateLimiter;
 
 const maxRequests = 100; // hard limit
 const softLimit = Math.floor(maxRequests * 0.9); // 95% of maxRequests
 
-const rateLimiter = new RateLimiterRedis({
-  storeClient: redisClient,
-  points: maxRequests,
-  duration: 15 * 60, // per 15 minutes by IP
-});
+const setupRateLimiter = () => {
+  redisClient = createClient({
+    password: "4FzbJW5NPpyh8RtaSvjgJDIkpnHEi1OA",
+    host: "redis-16088.c44.us-east-1-2.ec2.cloud.redislabs.com",
+    port: 16088,
+  });
 
-module.exports = (req, res, next) => {
+  redisClient.on("error", function (err) {
+    AppLogger.error("Could not establish a connection with redis🚨 " + err);
+  });
+
+  redisClient.on("connect", function (err) {
+    AppLogger.info("Connected to redis successfully 🎉");
+  });
+
+  rateLimiter = new RateLimiterRedis({
+    storeClient: redisClient,
+    points: maxRequests,
+    duration: 15 * 60, // per 15 minutes by IP
+  });
+};
+
+const rateLimit = (req, res, next) => {
   const key = req.user ? req.user.id : req.ip;
 
   rateLimiter
@@ -69,3 +74,9 @@ module.exports = (req, res, next) => {
         .send("Too Many Requests. Please try again after " + retryAfter + ".");
     });
 };
+
+const teardownRateLimiter = async () => {
+  await redisClient.quit(); // assuming quit method is to close connection
+};
+
+module.exports = { setupRateLimiter, rateLimit, teardownRateLimiter };

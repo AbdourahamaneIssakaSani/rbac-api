@@ -12,7 +12,7 @@ const AppLogger = require("./src/utils/app-logger");
 const AppError = require("./src/utils/app-error");
 const v1Routes = require("./src/routes/v1");
 const { connectV1Database } = require("./src/config/database/mongo");
-const rateLimiterGuard = require("./src/middlewares/rate.guard");
+const { rateLimit } = require("./src/middlewares/rate.guard");
 
 require("dotenv").config({
   path: `./src/config/envs/.env.${process.env.NODE_ENV}`,
@@ -50,7 +50,7 @@ app.use(mongoSanitize());
 app.use(xss());
 
 if (process.env.NODE_ENV !== "development") {
-  app.use(rateLimiterGuard);
+  app.use(rateLimit);
 }
 // protect against parameter pollution
 // add the parameters you want to whitelist (to be duplicated in the query string)
@@ -63,37 +63,44 @@ app.use(
 app.use("/api/v1", v1Routes);
 
 app.get("/", (req, res) => {
-  res.send("ZPlatform Server is running");
+  res.send("RBAC API Server is running");
 });
 
 // Middleware for 404 routes
 app.all("*", (req, res, next) => {
-  next(new AppError(`Can’t find ${req.originalUrl} on this server`));
+  next(new AppError(`Can’t find ${req.originalUrl} on this server`, 404));
 });
 
 // error handler
 app.use(globalErrorHandler);
 
 let server;
+if (require.main === module) {
+  // This block will only execute if this file was run directly, and not when it was required as a module
 
-(async () => {
-  await connectV1Database();
+  let server;
 
-  server = app.listen(PORT, () => {
-    AppLogger.info(`ZPlatform Server listening on port ${PORT} 🚀`);
+  (async () => {
+    await connectV1Database();
+
+    server = app.listen(PORT, () => {
+      AppLogger.info(`RBAC API Server listening on port ${PORT} 🚀`);
+    });
+  })();
+
+  process.on("unhandledRejection", (err) => {
+    AppLogger.error(
+      err ? err.message : "Unhandled rejection with no error object"
+    );
+
+    AppLogger.error(err ? err.stack : "No stack trace available");
+
+    if (server) {
+      server.close(() => process.exit(1));
+    } else {
+      process.exit(1);
+    }
   });
-})();
+}
 
-process.on("unhandledRejection", (err) => {
-  AppLogger.error(
-    err ? err.message : "Unhandled rejection with no error object"
-  );
-
-  AppLogger.error(err ? err.stack : "No stack trace available");
-
-  if (server) {
-    server.close(() => process.exit(1));
-  } else {
-    process.exit(1);
-  }
-});
+module.exports = app;

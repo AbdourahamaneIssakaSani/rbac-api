@@ -1,10 +1,9 @@
 const express = require("express");
 const AuthController = require("../../controllers/v1/auth.controller");
 const AuthGuard = require("../../middlewares/auth.guard");
-const { validateSignup } = require("../../middlewares/users.guard");
 const router = express.Router();
 
-router.post("/signup", validateSignup, AuthController.signup);
+router.post("/signup", AuthController.signup);
 router.post("/login", AuthController.login);
 router.get("/logout", AuthGuard.protect, AuthController.logout);
 router.post("/forgot-pwd", AuthController.forgotPassword);
