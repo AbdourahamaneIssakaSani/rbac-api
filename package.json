@@ -7,7 +7,7 @@
     "start:dev": "NODE_ENV=development nodemon index.js",
     "start:staging": "NODE_ENV=staging nodemon index.js",
     "start": "NODE_ENV=production node index.js",
-    "test": "NODE_ENV=test jest --watchAll",
+    "test": "NODE_ENV=test jest",
     "test:coverage": "NODE_ENV=test jest --coverage",
     "test:watch": "NODE_ENV=test jest --watch",
     "test:verbose": "jest --verbose",
