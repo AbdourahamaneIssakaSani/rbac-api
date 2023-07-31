@@ -70,6 +70,7 @@ exports.hasPrivilege = (requiredLevel) => {
   const levelPrivileges = {
     user: 1,
     admin: 2,
+    auditor: 2.5,
     root: 3,
   };
 
@@ -78,7 +79,7 @@ exports.hasPrivilege = (requiredLevel) => {
       return next();
     } else {
       return next(
-        AppError("You do not have permission to perform this action", 403)
+        new AppError("You do not have permission to perform this action", 403)
       );
     }
   };
@@ -89,15 +90,21 @@ exports.hasHigherPrivilege = asyncHandler(async (req, res, next) => {
   const levelPrivileges = {
     user: 1,
     admin: 2,
+    auditor: 2.5,
     root: 3,
   };
 
   const user = await User.findById(req.params.id);
+
+  if (!user) {
+    return next(new AppError("No user found with that id", 404));
+  }
+
   if (levelPrivileges[req.user.role] > levelPrivileges[user.role]) {
     return next();
   }
   return next(
-    AppError("You do not have permission to perform this action", 403)
+    new AppError("You do not have permission to perform this action", 403)
   );
 });
 

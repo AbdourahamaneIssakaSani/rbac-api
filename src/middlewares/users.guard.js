@@ -1,5 +1,3 @@
-const AppError = require("../utils/app-error");
-const validate = require("validate.js");
 const { JoiRequestBodyValidator } = require("../utils/joiValidator");
 const Joi = require("joi");
 

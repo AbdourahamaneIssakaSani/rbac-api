@@ -123,7 +123,7 @@ class Factory {
    */
   static delete(Model) {
     return asyncHandler(async (req, res, next) => {
-      const doc = await Model.findByIdAndDelete(req.params.id);
+      await Model.findByIdAndDelete(req.params.id);
 
       res.status(204).json({
         status: "success",

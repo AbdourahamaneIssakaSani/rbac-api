@@ -76,7 +76,7 @@ exports.signup = asyncHandler(async (req, res, next) => {
 
   req.user = await User.findById(newUser._id).select("+refreshToken");
 
-  await sendVerifyEmail(req);
+  await sendVerifyEmail(req, null);
 
   await sendTokens(req.user, 201, res);
 });
