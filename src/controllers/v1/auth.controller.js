@@ -7,17 +7,24 @@ const asyncHandler = require("../../utils/async.handler");
 const AppError = require("../../utils/app-error");
 const EmailServices = require("../../utils/email.service");
 const { sendVerifyEmail } = require("./user.controller");
+const { promisify } = require("util");
 
 /**
- * Sign jwt token
- * @param {Object} payload jwt payload object
- * @returns {String} jwt token
+ * Get access token and refresh token for a user.
+ * @param {*} user - The user document.
+ * @returns {Promise<{accessToken: string, refreshToken: string}>} - The access token and refresh token.
  */
-const signJWTToken = (payload) => {
-  return jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN,
+async function getTokens(payload) {
+  const accessToken = jwt.sign(payload, process.env.JWT_ACCESS_SECRET, {
+    expiresIn: process.env.JWT_ACCESS_EXPIRES_IN,
   });
-};
+
+  const refreshToken = jwt.sign(payload, process.env.JWT_REFRESH_SECRET, {
+    expiresIn: process.env.JWT_REFRESH_EXPIRES_IN,
+  });
+
+  return { accessToken, refreshToken };
+}
 
 /**
  * Sends access token for signup and login.
@@ -25,9 +32,18 @@ const signJWTToken = (payload) => {
  * @param {Number} statusCode http status code to send
  * @param {Response} res response object
  */
-const sendToken = (user, statusCode, res) => {
+const sendTokens = async (user, statusCode, res) => {
   const payload = { id: user._id };
-  const accessToken = signJWTToken(payload);
+  const tokens = await getTokens(payload);
+  // Assuming getTokens returns an object with properties 'accessToken' and 'refreshToken'
+  const { accessToken, refreshToken } = tokens;
+
+  user.refreshToken = refreshToken;
+  // user.password = undefined;
+
+  user.markModified("refreshToken");
+  await user.save({ validateBeforeSave: false });
+  user.refreshToken = undefined;
 
   const cookieOptions = {
     expires: new Date(
@@ -38,9 +54,7 @@ const sendToken = (user, statusCode, res) => {
   };
 
   res.cookie("accessToken", accessToken, cookieOptions);
-
-  // removes the password value before responding
-  user.password = undefined;
+  res.cookie("refreshToken", refreshToken, cookieOptions);
 
   res.status(statusCode).json({
     status: "success",
@@ -60,10 +74,11 @@ exports.signup = asyncHandler(async (req, res, next) => {
     passwordConfirm: req.body.passwordConfirm,
   });
 
-  req.user = newUser;
+  req.user = await User.findById(newUser._id).select("+refreshToken");
+
   await sendVerifyEmail(req);
 
-  sendToken(newUser, 201, res);
+  await sendTokens(req.user, 201, res);
 });
 
 /**
@@ -76,20 +91,23 @@ exports.login = asyncHandler(async (req, res, next) => {
     return next(new AppError("Please provide email/password", 400));
   }
 
-  const user = await User.findOne({ email });
+  // Get the user with the password for verification
+  const userWithPassword = await User.findOne({ email }).select("+password");
 
-  if (!user || !(await user.verifyPassword(password))) {
+  if (!userWithPassword || !(await userWithPassword.verifyPassword(password))) {
     return next(new AppError("Incorrect email or password", 401));
   }
 
-  if (user.hasTwoFactorAuth) {
+  if (userWithPassword.hasTwoFactorAuth) {
     return res.status(200).json({
       status: "success",
       message: "Provide the 2FA token to continue",
-      data: { id: user._id },
+      data: { id: userWithPassword._id },
     });
   } else {
-    sendToken(user, 200, res);
+    // Get the user without the password for sending with tokens
+    const userWithoutPassword = await User.findOne({ email });
+    await sendTokens(userWithoutPassword, 200, res);
   }
 });
 
@@ -127,13 +145,14 @@ exports.passwordLessLogin = asyncHandler(async (req, res, next) => {
  * Verify a user with 2FA link.
  */
 exports.verifyPasswordLessLogin = asyncHandler(async (req, res, next) => {
-  // Get the token from the URL
   const { token } = req.params;
 
-  // Decode the token
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  if (!token) {
+    return next(new AppError("Invalid token", 400));
+  }
 
-  // Find the user based on the id in the token
+  const decoded = jwt.verify(token, process.env.JWT_LOGIN_SECRET);
+
   const user = await User.findById(decoded.id);
 
   if (!user) {
@@ -142,17 +161,15 @@ exports.verifyPasswordLessLogin = asyncHandler(async (req, res, next) => {
     );
   }
 
-  // Send a new JWT to the user for their session
-  sendToken(user, 200, res);
+  await sendTokens(user, 200, res);
 });
 
 /**
  * Setup 2FA for a user.
  */
 exports.setTwoFactorLogin = asyncHandler(async (req, res, next) => {
-  // Generate a secret key.
   const user = await User.findById(req.user.id);
-  // Save this secret for the user in the database.
+
   const secret = speakeasy.generateSecret({
     length: 20,
     name: `RBAC API (${user.email})`,
@@ -163,7 +180,6 @@ exports.setTwoFactorLogin = asyncHandler(async (req, res, next) => {
   user.hasTwoFactorAuth = true;
   await user.save({ validateBeforeSave: false });
 
-  // Get the data URL of the authenticator URL
   QRCode.toDataURL(secret.otpauth_url, function (err, data_url) {
     res.render("qrcode", { url: data_url });
   });
@@ -175,7 +191,7 @@ exports.setTwoFactorLogin = asyncHandler(async (req, res, next) => {
 exports.twoFactorLogin = asyncHandler(async (req, res, next) => {
   const { code, id } = req.body;
 
-  const user = await User.findById(id);
+  const user = await User.findById(id).select("+twoFactorSecret");
 
   const secret = user.twoFactorSecret;
 
@@ -186,7 +202,9 @@ exports.twoFactorLogin = asyncHandler(async (req, res, next) => {
   });
 
   if (verified) {
-    sendToken(user, 200, res);
+    // get user without 2fa secret
+    const userWithoutSecret = await User.findById(id);
+    await sendTokens(userWithoutSecret, 200, res);
   } else {
     return next(new AppError("Invalid 2FA token.", 401));
   }
@@ -227,11 +245,6 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
     message: `Forgot your password ? Click on this link ${resetUrl}`,
   });
 
-  // res.status(200).json({
-  //   resetToken,
-  //   resetUrl,
-  // });
-
   res.status(200).json({
     status: "success",
     message: "A password reset link has been sent to your email!",
@@ -242,7 +255,6 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
  * Reset password of a user
  */
 exports.resetPassword = asyncHandler(async (req, res, next) => {
-  // create hash and get user who has it
   const hashedToken = crypto
     .createHash("sha256")
     .update(req.params.token)
@@ -274,7 +286,7 @@ exports.resetPassword = asyncHandler(async (req, res, next) => {
  * Updates password of a user
  */
 exports.updatePassword = asyncHandler(async (req, res, next) => {
-  const user = await User.findById(req.body.id);
+  const user = await User.findById(req.user.id).select("+password");
 
   if (!user || !(await user.verifyPassword(req.body.currentPassword))) {
     return next(
@@ -282,13 +294,40 @@ exports.updatePassword = asyncHandler(async (req, res, next) => {
     );
   }
 
-  user.password = req.body.password;
-  user.passwordConfirm = req.body.passwordConfirm;
+  user.password = req.body.newPassword;
+  user.passwordConfirm = req.body.newPasswordConfirm;
 
-  await user.save();
+  await user.save({ validateBeforeSave: false });
 
   res.status(200).json({
     status: "success",
     message: "Password has been changed successfully",
   });
+});
+
+/**
+ * Refreshes the access token of a user.
+ */
+exports.refreshToken = asyncHandler(async (req, res, next) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return next(new AppError("No refresh token", 400));
+  }
+
+  const decoded = await promisify(jwt.verify)(
+    refreshToken,
+    process.env.JWT_REFRESH_SECRET
+  );
+
+  const user = await User.findById(decoded.id).select("+refreshToken");
+
+  if (!user) {
+    return next(new AppError("User does not exist", 404));
+  }
+
+  if (!(await user.verifyRefreshToken(refreshToken))) {
+    return next(new AppError("Invalid refresh token", 401));
+  }
+  sendTokens(user, 200, res);
 });

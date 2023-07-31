@@ -27,7 +27,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
 
   const decoded = await promisify(jwt.verify)(
     accessToken,
-    process.env.JWT_SECRET
+    process.env.JWT_ACCESS_SECRET
   );
 
   //   make sure the validated token belongs to the user
@@ -128,7 +128,7 @@ exports.validateUserSignup = JoiRequestBodyValidator(
  * @description Joi validation middleware for user login data. Validates email and password fields.
  * @returns {object} Middleware to validate the request body using Joi
  */
-exports.validateLogin = JoiRequestBodyValidator(
+exports.validateUserLogin = JoiRequestBodyValidator(
   Joi.object({
     email: Joi.string().email().required(),
     password: Joi.string().required(),
@@ -158,7 +158,7 @@ exports.validateUpdatePassword = JoiRequestBodyValidator(
  * @description Joi validation middleware for password recovery. Validates the email field to send a recovery link to the user.
  * @returns {object} Middleware to validate the request body using Joi
  */
-exports.validateForgotPassword = JoiRequestBodyValidator(
+exports.validatePasswordLessOrForgotPassword = JoiRequestBodyValidator(
   Joi.object({
     email: Joi.string().email().required(),
   }).unknown(false)
@@ -176,5 +176,28 @@ exports.validateResetPassword = JoiRequestBodyValidator(
     passwordConfirm: Joi.any().valid(Joi.ref("password")).required().messages({
       "any.only": '"passwordConfirm" must match "password"',
     }),
+  }).unknown(false)
+);
+
+/**
+ * @function validateRefreshToken
+ * @description Joi validation middleware for refreshing the user's access token. Validates the refreshToken field.
+ * @returns {object} Middleware to validate the request body using Joi
+ */
+exports.validateRefreshToken = JoiRequestBodyValidator(
+  Joi.object({
+    refreshToken: Joi.string().required(),
+  }).unknown(false)
+);
+
+/**
+ * @function validate2FALogin
+ * @description Joi validation middleware for two-factor authentication. Validates the id and code fields.
+ * @returns {object} Middleware to validate the request body using Joi
+ */
+exports.validate2FALogin = JoiRequestBodyValidator(
+  Joi.object({
+    id: Joi.string().required(),
+    code: Joi.string().required(),
   }).unknown(false)
 );
