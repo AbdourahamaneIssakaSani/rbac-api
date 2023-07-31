@@ -34,6 +34,10 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  blocked: {
+    type: Boolean,
+    default: false,
+  },
   maritalStatus: {
     type: String,
     enum: ["Single", "Married", "Divorced", "Widowed"],
@@ -47,6 +51,11 @@ const userSchema = new mongoose.Schema({
   },
   dateOfBirth: {
     type: Date,
+    validate: {
+      validator: function (date) {
+        return new Date().getFullYear() - date.getFullYear() > 18;
+      },
+    },
   },
   nationality: {
     type: String,
@@ -60,6 +69,7 @@ const userSchema = new mongoose.Schema({
       message: "Password is required",
     },
     minlength: 8,
+    select: false,
   },
   passwordConfirm: {
     type: String,
@@ -79,12 +89,15 @@ const userSchema = new mongoose.Schema({
   passwordChangedAt: {
     type: Date,
     default: Date.now(),
+    select: false,
   },
   passwordResetToken: {
     type: String,
+    select: false,
   },
   passwordResetTokenExpires: {
     type: Date,
+    select: false,
   },
   emailVerified: {
     type: Boolean,
@@ -92,13 +105,20 @@ const userSchema = new mongoose.Schema({
   },
   verifyEmailToken: {
     type: String,
+    select: false,
   },
   twoFactorSecret: {
     type: String,
+    select: false,
   },
   hasTwoFactorAuth: {
     type: Boolean,
     default: false,
+  },
+  refreshToken: {
+    type: String,
+    default: null,
+    select: false,
   },
 });
 
@@ -109,23 +129,20 @@ const userSchema = new mongoose.Schema({
  * Hashes the password before save()
  */
 userSchema.pre("save", async function (next) {
-  // if the password is not new, skip this middleware
   if (!this.isModified("password")) return next();
-
   this.password = await argon.hash(this.password);
-  //   no need to save this
   this.passwordConfirm = undefined;
+  // catches the time of creating/changing the password
+  this.passwordChangedAt = Date.now();
   next();
 });
 
 /**
- * Catches the time of changing the password
+ * Hash the refresh token before save()
  */
 userSchema.pre("save", async function (next) {
-  // if the password is modified and not the first time of the user
-  if (!this.isModified("password")) return next();
-  this.passwordChangedAt = Date.now();
-
+  if (!this.isModified("refreshToken") || !this.refreshToken) return next();
+  this.refreshToken = await argon.hash(this.refreshToken);
   next();
 });
 
@@ -141,20 +158,20 @@ userSchema.pre(/^find/, function (next) {
 
 /**
  * Verifies the password provided with the hash stored.
- * @param {String} candiatePassword password provided by user
- * @returns {Boolean}
+ * @param {String} candidatePassword password provided by user
+ * @returns {Boolean} true if password is correct, false otherwise
  */
-userSchema.methods.verifyPassword = async function (candiatePassword) {
-  return argon.verify(this.password, candiatePassword);
+userSchema.methods.verifyPassword = async function (candidatePassword) {
+  return argon.verify(this.password, candidatePassword);
 };
 
 /**
  * Checks if the password has changed after the jwt token has been issued
- * @param {Number} JWTTimestamp
- * @returns {Boolean}
+ * @param {Number} JWTTimestamp timestamp of when the jwt token was issued
+ * @returns {Boolean} true if password has changed, false otherwise
  */
 userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
-  return JWTTimestamp < parseInt(this.passwordChangedAt.getTime() / 1000);
+  return JWTTimestamp < parseInt(this.passwordChangedAt);
 };
 
 /**
@@ -176,7 +193,7 @@ userSchema.methods.createEmailVerficationToken = function () {
  * Generates a login token.
  */
 userSchema.methods.createLoginToken = function () {
-  const token = jwt.sign({ id: this._id }, process.env.JWT_SECRET, {
+  const token = jwt.sign({ id: this._id }, process.env.JWT_LOGIN_SECRET, {
     expiresIn: "10m",
   });
 
@@ -198,6 +215,14 @@ userSchema.methods.createResetPasswordToken = function () {
   this.passwordResetTokenExpires = Date.now() + 60 * 1000 * 10; // date now + 10min
 
   return resetToken;
+};
+
+/**
+ * Verifies the refresh token provided with the hash stored.
+ */
+
+userSchema.methods.verifyRefreshToken = async function (refreshToken) {
+  return argon.verify(this.refreshToken, refreshToken);
 };
 
 const User = mongooseV1.model("Users", userSchema);

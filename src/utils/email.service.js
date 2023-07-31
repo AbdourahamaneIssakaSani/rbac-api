@@ -21,12 +21,12 @@ class EmailServices {
       service: "gmail",
       auth: {
         user: "a.sani@alustudent.com",
-        pass: "37-choose-enter-Botswana-62",
+        pass: process.env.EMAIL_PASSWORD,
       },
     });
 
     const mailOptions = {
-      from: "Abissa <hello@abissa.tech>",
+      from: "Abissa From RBAC System <a.sani@alustudent.com>",
       to: options.email,
       subject: options.subject,
       text: options.message,
@@ -45,10 +45,11 @@ class EmailServices {
       },
     });
     const mailOptions = {
-      from: "Abissa <hello@abissa.tech>",
+      from: "Abissa From RBAC System <a.sani@alustudent.com>",
       to: options.email,
       subject: options.subject,
       html: options.html,
+      // eslint-disable-next-line no-undef
       text: htmlToText.fromString(html),
     };
 

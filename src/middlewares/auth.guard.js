@@ -27,7 +27,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
 
   const decoded = await promisify(jwt.verify)(
     accessToken,
-    process.env.JWT_SECRET
+    process.env.JWT_ACCESS_SECRET
   );
 
   //   make sure the validated token belongs to the user
@@ -47,7 +47,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
 
 /**
  * Verifies if the user has access rights to a route.
- *
+ * Access middleware
  * @param {...string} roles list of roles for a route
  * @returns {function} middleware function that checks if the user's role is in the list of allowed roles
  */
@@ -70,17 +70,43 @@ exports.hasPrivilege = (requiredLevel) => {
   const levelPrivileges = {
     user: 1,
     admin: 2,
+    auditor: 2.5,
     root: 3,
   };
 
   return (req, res, next) => {
     if (levelPrivileges[req.user.role] >= levelPrivileges[requiredLevel]) {
-      next();
+      return next();
     } else {
-      res.status(403).send("Access denied. Insufficient privileges.");
+      return next(
+        new AppError("You do not have permission to perform this action", 403)
+      );
     }
   };
 };
+
+// check if the current user has higher privileges than the user being updated
+exports.hasHigherPrivilege = asyncHandler(async (req, res, next) => {
+  const levelPrivileges = {
+    user: 1,
+    admin: 2,
+    auditor: 2.5,
+    root: 3,
+  };
+
+  const user = await User.findById(req.params.id);
+
+  if (!user) {
+    return next(new AppError("No user found with that id", 404));
+  }
+
+  if (levelPrivileges[req.user.role] > levelPrivileges[user.role]) {
+    return next();
+  }
+  return next(
+    new AppError("You do not have permission to perform this action", 403)
+  );
+});
 
 /**
  * @function validateUserSignup
@@ -109,7 +135,7 @@ exports.validateUserSignup = JoiRequestBodyValidator(
  * @description Joi validation middleware for user login data. Validates email and password fields.
  * @returns {object} Middleware to validate the request body using Joi
  */
-exports.validateLogin = JoiRequestBodyValidator(
+exports.validateUserLogin = JoiRequestBodyValidator(
   Joi.object({
     email: Joi.string().email().required(),
     password: Joi.string().required(),
@@ -139,7 +165,7 @@ exports.validateUpdatePassword = JoiRequestBodyValidator(
  * @description Joi validation middleware for password recovery. Validates the email field to send a recovery link to the user.
  * @returns {object} Middleware to validate the request body using Joi
  */
-exports.validateForgotPassword = JoiRequestBodyValidator(
+exports.validatePasswordLessOrForgotPassword = JoiRequestBodyValidator(
   Joi.object({
     email: Joi.string().email().required(),
   }).unknown(false)
@@ -157,5 +183,28 @@ exports.validateResetPassword = JoiRequestBodyValidator(
     passwordConfirm: Joi.any().valid(Joi.ref("password")).required().messages({
       "any.only": '"passwordConfirm" must match "password"',
     }),
+  }).unknown(false)
+);
+
+/**
+ * @function validateRefreshToken
+ * @description Joi validation middleware for refreshing the user's access token. Validates the refreshToken field.
+ * @returns {object} Middleware to validate the request body using Joi
+ */
+exports.validateRefreshToken = JoiRequestBodyValidator(
+  Joi.object({
+    refreshToken: Joi.string().required(),
+  }).unknown(false)
+);
+
+/**
+ * @function validate2FALogin
+ * @description Joi validation middleware for two-factor authentication. Validates the id and code fields.
+ * @returns {object} Middleware to validate the request body using Joi
+ */
+exports.validate2FALogin = JoiRequestBodyValidator(
+  Joi.object({
+    id: Joi.string().required(),
+    code: Joi.string().required(),
   }).unknown(false)
 );
