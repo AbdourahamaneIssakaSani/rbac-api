@@ -28,7 +28,7 @@ const databaseTransportOptions = {
 };
 
 // Common transports
-let appTransports = [
+const appTransports = [
   new transports.Console({
     level: "debug",
     handleExceptions: true,

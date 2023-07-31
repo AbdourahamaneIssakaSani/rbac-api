@@ -1,5 +1,4 @@
 const express = require("express");
-const mongoose = require("mongoose");
 const helmet = require("helmet");
 const mongoSanitize = require("express-mongo-sanitize");
 const xss = require("xss-clean");
@@ -12,7 +11,11 @@ const AppLogger = require("./src/utils/app-logger");
 const AppError = require("./src/utils/app-error");
 const v1Routes = require("./src/routes/v1");
 const { connectV1Database } = require("./src/config/database/mongo");
-const { rateLimit } = require("./src/middlewares/rate.guard");
+const {
+  rateLimit,
+  setupRateLimiter,
+  teardownRateLimiter,
+} = require("./src/middlewares/rate.guard");
 
 require("dotenv").config({
   path: `./src/config/envs/.env.${process.env.NODE_ENV}`,
@@ -63,7 +66,7 @@ app.use(
 app.use("/api/v1", v1Routes);
 
 app.get("/", (req, res) => {
-  res.send("RBAC API Server is running");
+  res.send("RBAC System Server is running");
 });
 
 // Middleware for 404 routes
@@ -74,17 +77,17 @@ app.all("*", (req, res, next) => {
 // error handler
 app.use(globalErrorHandler);
 
-let server;
 if (require.main === module) {
   // This block will only execute if this file was run directly, and not when it was required as a module
 
   let server;
 
   (async () => {
+    setupRateLimiter();
     await connectV1Database();
 
     server = app.listen(PORT, () => {
-      AppLogger.info(`RBAC API Server listening on port ${PORT} 🚀`);
+      AppLogger.info(`RBAC System Server listening on port ${PORT} 🚀`);
     });
   })();
 
@@ -100,6 +103,8 @@ if (require.main === module) {
     } else {
       process.exit(1);
     }
+    // close rate limiter
+    teardownRateLimiter();
   });
 }
 

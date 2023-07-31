@@ -49,6 +49,7 @@ class EmailServices {
       to: options.email,
       subject: options.subject,
       html: options.html,
+      // eslint-disable-next-line no-undef
       text: htmlToText.fromString(html),
     };
 

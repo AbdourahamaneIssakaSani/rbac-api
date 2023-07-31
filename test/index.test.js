@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 const request = require("supertest");
 const mongoose = require("mongoose");
 const app = require("../index"); // accessing app from the exported object
@@ -28,6 +29,6 @@ describe("Server", () => {
   it("should start and show the welcome message", async () => {
     const res = await request(server).get("/");
     expect(res.statusCode).toEqual(200);
-    expect(res.text).toBe("RBAC API Server is running");
+    expect(res.text).toBe("RBAC System Server is running");
   }, 10000);
 });
