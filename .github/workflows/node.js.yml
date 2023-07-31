@@ -1,7 +1,7 @@
 # This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
 
-name: RBAC API CI/CD
+name: RBAC System CI/CD
 
 on:
   push:
@@ -12,10 +12,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env: # Define the environment variables here
+    env:
       PORT: 4000
-      JWT_SECRET: ${{ secrets.JWT_SECRET }}
-      JWT_EXPIRES_IN: 90d
+      JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
+      JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+      JWT_LOGIN_SECRET: ${{ secrets.JWT_LOGIN_SECRET }}
+      JWT_ACCESS_EXPIRES_IN: 30d
+      JWT_REFRESH_EXPIRES_IN: 90d
       JWT_COOKIE_EXPIRES_IN: 90
       V1_MONGO_URI: ${{ secrets.V1_MONGO_URI }}
       EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
@@ -34,4 +37,3 @@ jobs:
         cache: 'npm'
     - run: npm ci
     - run: npm test
-    
