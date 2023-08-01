@@ -1,4 +1,3 @@
-var mongoose = require("mongoose");
 const AppError = require("../utils/app-error");
 const AppLogger = require("../utils/app-logger");
 const MongooseAppError = require("../utils/mongoose-error");
